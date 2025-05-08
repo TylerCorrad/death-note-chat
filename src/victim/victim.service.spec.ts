@@ -288,4 +288,97 @@ describe('VictimService - Cron Job', () => {
         })
       );      
     });
+
+    it('debería marcar como muerta a la víctima si tiene causa registrada pero no detalles y han pasado más de 400s', async () => {
+        const mockVictim = {
+          id: 'uuid-3',
+          name: 'Alice',
+          lastName: 'Smith',
+          deathType: 'Heart Attack',
+          details: null,
+          isAlive: true,
+          createdAt: new Date(Date.now() - 401_000), // hace 401 segundos
+          EditedAt: null,
+          images: ['image.jpg'],
+        };
+      
+        jest.spyOn(service, 'findAll').mockResolvedValueOnce([mockVictim]);
+      
+        const updateSpy = jest.spyOn(victimRepo, 'update').mockResolvedValue({} as any);
+      
+        await service.findAllCron();
+        
+        expect(updateSpy).toHaveBeenCalledWith(
+            'uuid-3',
+            expect.objectContaining({ isAlive: false })
+          );          
+      });
+
+      it('no debería marcar como muerta a la víctima si no han pasado 400s y no tiene detalles', async () => {
+        const mockVictim = {
+            id: 'uuid-4',
+            name: 'Ana',
+            lastName: 'Torres',
+            isAlive: true,
+            deathType: 'asesinato', // Tiene causa, pero no tiene detalles
+            details: null,
+            createdAt: new Date(Date.now() - 300 * 1000), // Solo 300s atrás
+            EditedAt: null,
+            images: ['image.jpg'], // Tiene foto
+          };
+      
+        jest.spyOn(service, 'findAll').mockResolvedValueOnce([mockVictim]);
+        const updateSpy = jest.spyOn(victimRepo, 'update').mockResolvedValue({} as any);
+      
+        await service.findAllCron();
+      
+        expect(updateSpy).not.toHaveBeenCalled();
+      });
+
+      it('debería marcar como muerta a la víctima si tiene causa registrada pero no detalles y han pasado más de 400s', async () => {
+        const now = new Date();
+      
+        const victimOverdue = {
+            id: 'uuid-7',
+            name: 'Ricardo',
+            lastName: 'Pérez',
+            isAlive: true,
+            deathType: 'Ataque al corazón',
+            details: null,
+            createdAt: new Date(now.getTime() - 401 * 1000), // 401s ago
+            EditedAt: null,
+            images: [{
+                  id: 1,
+                  url: 'foto.jpg',
+                  victim: {} as Victim,
+                },],
+                checkFullNameInsert: () => {}, 
+          };
+          
+      
+        jest.spyOn(victimRepo, 'find').mockResolvedValue([victimOverdue]);
+        const updateSpy = jest.spyOn(victimRepo, 'update').mockResolvedValue({} as any);
+      
+        await service.findAllCron();
+      
+        expect(updateSpy).toHaveBeenCalledWith(
+            'uuid-7',
+          expect.objectContaining({
+            isAlive: false,
+            EditedAt: expect.any(Date),
+          })
+        );
+      });
+      
+      it('debería lanzar un error si el nombre está vacío', async () => {
+        await expect(
+          service.create({
+            name: '',
+            lastName: 'Gómez',
+            deathType: 'Ataque al corazón',
+            images: [],
+          }),
+        ).rejects.toThrow('Unexpected error, check server logs');
+      });
+      
   });
